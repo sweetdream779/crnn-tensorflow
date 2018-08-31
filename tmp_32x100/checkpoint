@@ -1,0 +1,3 @@
+model_checkpoint_path: "crnn-model.ckpt-6900"
+all_model_checkpoint_paths: "crnn-model.ckpt-6800"
+all_model_checkpoint_paths: "crnn-model.ckpt-6900"
