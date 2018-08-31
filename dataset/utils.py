@@ -1,9 +1,8 @@
 import tensorflow as tf
 import os
-import Image
+from PIL import Image
 import numpy as np
 
-char_list = "0123456789abcdefghijklmnopqrstuvwxyz "
 
 def int64_feature(value):
     """Wrapper for inserting int64 features into Example proto.
@@ -87,7 +86,7 @@ def load_image(img_dir, width = 100, height = 32):
     data = data.tobytes()
     return data
 
-
+'''
 def char_to_int(char):
     temp = ord(char)
     if temp>=97 and temp<=122:
@@ -101,33 +100,34 @@ def char_to_int(char):
             else:
                 temp = 36
     return temp
+'''
+
+def char_to_int(char, alphabet):
+    return alphabet.find(char)
+
+def int_to_char(number,alphabet):
+    return alphabet[number]
 
 
-def int_to_char(number):
-    return char_list[number]
 
-
-
-def encode_labels(labels):
+def encode_labels(labels,alphabet):
     """
     :param labels:
-    :return:
-    把label里面的东西编码，转为可以方便CTC时使用的类型
+    :return:label
     """
-    encord_labeles = []
+    encord_labels = []
     lengths = []
     for label in labels:
-        encord_labele = [char_to_int(char) for char in label]
-        encord_labeles.append(encord_labele)
+        encord_label = [char_to_int(char, alphabet) for char in label]
+        encord_labels.append(encord_label)
         lengths.append(len(label))
-    return encord_labeles,lengths
+    return encord_labels,lengths
 
 
 def encode_label(label):
     """
-    :param labels:
-    :return:
-    把label里面的东西编码，转为可以方便CTC时使用的类型
+    :param labels
+    :return:label
     """
     encord_label = [char_to_int(char) for char in label]
     length = len(label)

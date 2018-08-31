@@ -38,18 +38,15 @@ class CRNNNet(object):
         nm = [64, 128, 256, 256, 512, 512, 512],# In/Out size
         leakyRelu = False,
         n_rnn =2,
-        nh = 100,#size of the lstm hidden state
-        imgH = 64,#the height / width of the input image to network
+        nh = 256,#size of the lstm hidden state
+        imgH = 32,#the height / width of the input image to network #32/16
         nc = 1,
-        nclass = 37,#0~9,a~z,还有一个啥都不是
-        batch_size= 32,
+        nclass = 38,#0~9,a~z,- (+blank)
+        batch_size= 16,
         seq_length = 26,
         input_size = 512,
-        reuse = None
+        reuse = tf.AUTO_REUSE 
            )
-
-
-
 
 
     def __init__(self, params=None):
@@ -62,25 +59,27 @@ class CRNNNet(object):
             self.params = CRNNNet.default_params
 
     # ======================================================================= #
-    def net(self, inputs,width = None):
+    def net(self, inputs, batch = None, width = None):
         """rcnn  network definition.
         """
-        def BLSTM(inputs,num_hidden,num_layers,seq_len,num_classes):
+        def BLSTM(inputs,num_hidden,num_layers,seq_len,num_classes,batch_s = None):
             # Defining the cell
             # Can be:
             #   tf.nn.rnn_cell.RNNCell
             #   tf.nn.rnn_cell.GRUCell
-            cell = tf.contrib.rnn.core_rnn_cell.LSTMCell(num_hidden, state_is_tuple=True,reuse = self.params.reuse)
+            cell = tf.contrib.rnn.LSTMCell(num_hidden, state_is_tuple=True,reuse = self.params.reuse)
 
             # Stacking rnn cells
-            stack = tf.contrib.rnn.core_rnn_cell.MultiRNNCell([cell] * num_layers,
+            stack = tf.contrib.rnn.MultiRNNCell([cell] * num_layers,
                                                               state_is_tuple=True)
 
             # The second output is the last state and we will no use that
-            outputs, _ = tf.nn.dynamic_rnn(cell, inputs, sequence_length=seq_len, dtype=tf.float32)#seq_len
+            outputs, _ = tf.nn.dynamic_rnn(cell, inputs, sequence_length=seq_len, dtype=tf.float32)#seq_len for speed up
+            #outputs, _ = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32)#seq_len
 
-            shape = tf.shape(inputs)
-            batch_s, max_timesteps = shape[0], shape[1]
+            if(batch_s is None):
+                shape = tf.shape(inputs)
+                batch_s, max_timesteps = shape[0], shape[1]
 
             # Reshaping to apply the same weights over the timesteps
             outputs = tf.reshape(outputs, [-1, num_hidden])
@@ -123,12 +122,17 @@ class CRNNNet(object):
             return net
 
         with tf.variable_scope("RCNN_net",reuse=self.params.reuse):
+            
+            #!!! inputs must have height = 32
+            
             net = conv2d(inputs,0)#input batch_size*32*100*3 #net batch_size *32*100*64
+            print("conv2d ", net.shape)
             net = slim.max_pool2d(net, [2, 2], scope='pool1')#net batch_size *16*50*64
-            print("poll_0 ", net.shape)
+            print("pool_0 ", net.shape)
+
             net = conv2d(net,1)#batch_size*16*50*128
             net = slim.max_pool2d(net, [2, 2], scope='pool2')#batch_size *8*25*128 后面简写b
-            print("poll_1 ", net.shape)
+            print("pool_1 ", net.shape)
             net = conv2d(net,2,True) #b *8*25*256
 
             net = conv2d(net,3) #b*8*25*256
@@ -138,29 +142,40 @@ class CRNNNet(object):
             #net = slim.max_pool2d(net,[2,2],stride =[2,1],padding ="SAME")
             net = conv2d(net,4,True)#b*4*26*512
             net = conv2d(net,5)#b*4*26*512
-            net = custom_layers.pad2d(net, pad=(0, 1))#b*4*28*512
-            net = slim.max_pool2d(net,[2,2],stride=[2,1],padding = "VALID")#b*2*27*512
+            net = custom_layers.pad2d(net, pad=(0, 1))#b*4*28*512 init
+            #net = custom_layers.pad2d(net, pad=(1, 1))#b*4*28*512 for 16x50
+            
+            net = slim.max_pool2d(net,[2,2],stride=[2,1],padding = "VALID")#b*2*27*512 init
             print("pool_5", net.shape)
-            net = conv2d(net,6,True)#b*1*26*512
+            net = conv2d(net,6,True)#b*1*26*512 init
             print("conv6",net.shape)
 
             net = tf.squeeze(net,[1])#B*26*512
-            print("squeeze: ", net.shape)
+            #print("squeeze: ", net.shape)
             # net = tf.transpose(net, perm=(2,0,1)) #在pytroch中 LSTM函数顺序为seq_len,batch,input_size
             # print("transpose: ", net.shape)
+            
             if width is None:
                 seq_length = self.params.seq_length
             else:
                 seq_length = tf.cast(width/4+1,tf.int32)
-            seq_len = np.ones(self.params.batch_size) * seq_length
+            
+            seq = tf.constant(seq_length,tf.int32)
+            seq_len = tf.ones([], tf.int32) * seq
+            if(batch is None):
+                #seq_len = np.ones(self.params.batch_size) * seq_length
+                seq_len = tf.ones([self.params.batch_size], tf.int32) * seq
+                return BLSTM(net,self.params.nh,2,seq_len,self.params.nclass)
+            else:
+                
+                seq_len = tf.ones([batch], tf.int32) * seq
+                return BLSTM(net,self.params.nh,2,seq_len,self.params.nclass, batch)
             # net = BidirectionalLSTM(net,self.params.nh,self.params.nh,seq_len=seq_len,scope="BLSTM_1")#？*512*100
             # net =tf.reshape(net,[self.params.batch_size,self.params.seq_length,self.params.nh])
             # net = BidirectionalLSTM(net, self.params.nh, self.params.nclass, seq_len=seq_len, scope="BLSTM_2")  # ？*512*100
             # net = tf.reshape(net, [self.params.batch_size, self.params.seq_length, self.params.nclass])
-
-            return BLSTM(net,self.params.nh,2,seq_len,self.params.nclass)
-
-
+            
+            
 
     def losses(self, targets,logits, seq_len,
                scope='ssd_losses'):
@@ -171,3 +186,4 @@ class CRNNNet(object):
             cost = tf.reduce_mean(loss)
 
         return cost
+        
