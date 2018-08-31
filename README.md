@@ -10,9 +10,13 @@ The demo reads an example image and recognizes its text content.
 
 ## Train a new model
 
-1.Create .txt file with `path_to_jpg_image path_to_txt_file_iwth_label_for_image` raw contents(see dataset/train_list.txt example). Each image contains 1 word and text file with label contains 1 string.
-2.Use dataset/create_dataset.py to convert your dataset to tfrecord (dont forget change alphabet)
-3.Change model parameters in train.py
-4.Train your model with train.py
-5.Use export_model.sh to freeze your graph.
+1. Create .txt file with 
+```
+path_to_jpg_image path_to_txt_file_iwth_label_for_image
+```
+contents(see dataset/train_list.txt example). Each image contains 1 word and text file with label contains 1 string.
+2. Use dataset/create_dataset.py to convert your dataset to tfrecord (dont forget change alphabet)
+3. Change model parameters in train.py
+4. Train your model with train.py
+5. Use export_model.sh to freeze your graph.
 
